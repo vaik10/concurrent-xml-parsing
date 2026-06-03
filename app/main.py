@@ -6,6 +6,14 @@ app = FastAPI(
 )
 
 
+@app.get("/")
+async def root():
+    return {
+        "service": "xml-processing-pipeline",
+        "status": "running"
+    }
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
