@@ -12,27 +12,13 @@ from app.services.parser import ParseError, parse_feed
 
 from app.services.persistence import persist_records
 
-async def process_job(
-    job_id: str,
-    db: Session
+async def process_task(
+    task: JobTask,
+    job: Job,
+    db: Session,
+    semaphore: asyncio.Semaphore
 ):
-    job = db.query(Job).filter(Job.id == job_id).first()
-
-    if not job:
-        return
-
-    job.status = JobStatus.IN_PROGRESS
-    job.started_at = datetime.utcnow()
-
-    db.commit()
-
-    tasks = (
-        db.query(JobTask)
-        .filter(JobTask.job_id == job_id)
-        .all()
-    )
-
-    for task in tasks:
+    async with semaphore:
         task.status = TaskStatus.IN_PROGRESS
 
         db.commit()
@@ -63,10 +49,45 @@ async def process_job(
 
         db.commit()
 
+async def process_job(
+    job_id: str,
+    db: Session
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+
+    if not job:
+        return
+
+    job.status = JobStatus.IN_PROGRESS
+    job.started_at = datetime.utcnow()
+
+    db.commit()
+
+    tasks = (
+        db.query(JobTask)
+        .filter(JobTask.job_id == job_id)
+        .all()
+    )
+
+    semaphore = asyncio.Semaphore(2)
+
+    await asyncio.gather(
+        *[
+            process_task(
+                task=task,
+                job=job,
+                db=db,
+                semaphore=semaphore
+            )
+            for task in tasks
+        ]
+    )
+
     if job.failed_urls > 0:
         job.status = JobStatus.FAILED
     else:
         job.status = JobStatus.COMPLETED
+
     job.completed_at = datetime.utcnow()
 
     db.commit()
