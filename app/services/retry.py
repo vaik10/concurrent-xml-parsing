@@ -2,16 +2,21 @@ import asyncio
 
 from app.services.fetcher import FetchError
 
+from app.models.job_task import JobTask
+
 
 MAX_RETRIES = 3
 
 
 async def fetch_with_retry(
     fetch_coroutine,
-    url: str
+    url: str,
+    task: JobTask
 ):
     for attempt in range(MAX_RETRIES):
         try:
+            task.attempts += 1
+
             return await fetch_coroutine(url)
 
         except FetchError as exc:

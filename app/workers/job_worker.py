@@ -22,13 +22,15 @@ async def process_task(
 ):
     async with semaphore:
         task.status = TaskStatus.IN_PROGRESS
+        task.started_at = datetime.utcnow()
 
         db.commit()
 
         try:
             xml_content = await fetch_with_retry(
                 fetch_coroutine=fetch_xml,
-                url=task.url
+                url=task.url,
+                task=task
             )
             records = parse_feed(xml_content)
 
@@ -48,11 +50,13 @@ async def process_task(
         except (FetchError, ParseError) as exc:
             task.status = TaskStatus.FAILED
             task.error_message = str(exc)
+            task.failed_at = datetime.utcnow()
 
             job.failed_urls += 1
         except Exception as exc:
             task.status = TaskStatus.FAILED
-            task.error_message = f"Unexpected error: {str(exc)}"
+            task.error_message = f"Unexpected worker failure:: {str(exc)}"
+            task.failed_at = datetime.utcnow()
 
             job.failed_urls += 1
 
@@ -92,7 +96,7 @@ async def process_job(
         ]
     )
 
-    if job.failed_urls > 0:
+    if job.failed_urls == job.total_urls:
         job.status = JobStatus.FAILED
     else:
         job.status = JobStatus.COMPLETED

@@ -60,3 +60,18 @@ class JobTask(Base):
         back_populates="task",
         cascade="all, delete-orphan"
     )
+
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        default=0
+    )
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+
+    failed_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=True
+    )
