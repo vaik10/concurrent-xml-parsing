@@ -16,100 +16,109 @@ from app.services.persistence import persist_records
 
 from app.services.retry import fetch_with_retry
 
+from app.db.session import SessionLocal
+
 logger = structlog.get_logger() 
 
 async def process_task(
-    task: JobTask,
-    job: Job,
-    db: Session,
+    task_id: int,
+    job_id: str,
     semaphore: asyncio.Semaphore
 ):
     async with semaphore:
-        task.status = TaskStatus.IN_PROGRESS
-        task.started_at = datetime.utcnow()
-
-        logger.info(
-            "fetch_started",
-            job_id=job.id,
-            task_id=task.id,
-            url=task.url
-        )
-
-        db.commit()
+        db = SessionLocal()
 
         try:
-            xml_content = await fetch_with_retry(
-                fetch_coroutine=fetch_xml,
-                url=task.url,
-                task=task
-            )
-            records = parse_feed(xml_content)
-
-            persist_records(
-                db=db,
-                job_task_id=task.id,
-                records=records
+            job = (
+                db.query(Job)
+                .filter(Job.id == job_id)
+                .first()
             )
 
-            task.records_extracted = len(records)
+            task = (
+                db.query(JobTask)
+                .filter(JobTask.id == task_id)
+                .first()
+            )
 
-            task.status = TaskStatus.COMPLETED
-            task.completed_at = datetime.utcnow()
+            task.status = TaskStatus.IN_PROGRESS
+            task.started_at = datetime.utcnow()
 
-            job.completed_urls += 1
+            db.commit()
 
             logger.info(
-                "task_completed",
+                "fetch_started",
                 job_id=job.id,
                 task_id=task.id,
-                url=task.url,
-                records_extracted=len(records)
+                url=task.url
             )
 
-        except (FetchError, ParseError) as exc:
-            task.status = TaskStatus.FAILED
-            task.error_message = str(exc)
-            task.failed_at = datetime.utcnow()
+            try:
+                xml_content = await fetch_with_retry(
+                    fetch_coroutine=fetch_xml,
+                    url=task.url,
+                    task=task
+                )
 
-            job.failed_urls += 1
+                records = parse_feed(xml_content)
 
-            logger.error(
-                "task_failed",
-                job_id=job.id,
-                task_id=task.id,
-                url=task.url,
-                error=str(exc)
-            )
-        except Exception as exc:
-            task.status = TaskStatus.FAILED
-            task.error_message = f"Unexpected worker failure:: {str(exc)}"
-            task.failed_at = datetime.utcnow()
+                persist_records(
+                    db=db,
+                    job_task_id=task.id,
+                    records=records
+                )
 
-            job.failed_urls += 1
+                task.records_extracted = len(records)
 
-            logger.error(
-                "task_failed",
-                job_id=job.id,
-                task_id=task.id,
-                url=task.url,
-                error=str(exc)
-            )
-        except Exception as exc:
-            task.status = TaskStatus.FAILED
-            task.error_message = f"Unexpected worker failure:: {str(exc)}"
-            task.failed_at = datetime.utcnow()
+                task.status = TaskStatus.COMPLETED
+                task.completed_at = datetime.utcnow()
 
-            job.failed_urls += 1
+                job.completed_urls += 1
 
-            logger.error(
-                "task_failed",
-                job_id=job.id,
-                task_id=task.id,
-                url=task.url,
-                error=str(exc)
-            )
-        db.commit()
+                logger.info(
+                    "task_completed",
+                    job_id=job.id,
+                    task_id=task.id,
+                    url=task.url,
+                    records_extracted=len(records)
+                )
 
+            except (FetchError, ParseError) as exc:
+                task.status = TaskStatus.FAILED
+                task.error_message = str(exc)
+                task.failed_at = datetime.utcnow()
+
+                job.failed_urls += 1
+
+                logger.error(
+                    "task_failed",
+                    job_id=job.id,
+                    task_id=task.id,
+                    url=task.url,
+                    error=str(exc)
+                )
+
+            except Exception as exc:
+                task.status = TaskStatus.FAILED
+                task.error_message = (
+                    f"Unexpected worker failure: {str(exc)}"
+                )
+                task.failed_at = datetime.utcnow()
+
+                job.failed_urls += 1
+
+                logger.error(
+                    "unexpected_task_failure",
+                    job_id=job.id,
+                    task_id=task.id,
+                    url=task.url,
+                    error=str(exc)
+                )
+
+            db.commit()
+
+        finally:
+            db.close()
 async def process_job(
     job_id: str,
     db: Session
@@ -141,9 +150,8 @@ async def process_job(
     await asyncio.gather(
         *[
             process_task(
-                task=task,
-                job=job,
-                db=db,
+                task_id=task.id,
+                job_id=job.id,
                 semaphore=semaphore
             )
             for task in tasks
