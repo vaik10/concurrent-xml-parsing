@@ -1,4 +1,6 @@
 import asyncio
+import structlog
+
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -14,6 +16,8 @@ from app.services.persistence import persist_records
 
 from app.services.retry import fetch_with_retry
 
+logger = structlog.get_logger() 
+
 async def process_task(
     task: JobTask,
     job: Job,
@@ -23,6 +27,13 @@ async def process_task(
     async with semaphore:
         task.status = TaskStatus.IN_PROGRESS
         task.started_at = datetime.utcnow()
+
+        logger.info(
+            "fetch_started",
+            job_id=job.id,
+            task_id=task.id,
+            url=task.url
+        )
 
         db.commit()
 
@@ -47,12 +58,28 @@ async def process_task(
 
             job.completed_urls += 1
 
+            logger.info(
+                "task_completed",
+                job_id=job.id,
+                task_id=task.id,
+                url=task.url,
+                records_extracted=len(records)
+            )
+
         except (FetchError, ParseError) as exc:
             task.status = TaskStatus.FAILED
             task.error_message = str(exc)
             task.failed_at = datetime.utcnow()
 
             job.failed_urls += 1
+
+            logger.error(
+                "task_failed",
+                job_id=job.id,
+                task_id=task.id,
+                url=task.url,
+                error=str(exc)
+            )
         except Exception as exc:
             task.status = TaskStatus.FAILED
             task.error_message = f"Unexpected worker failure:: {str(exc)}"
@@ -60,6 +87,27 @@ async def process_task(
 
             job.failed_urls += 1
 
+            logger.error(
+                "task_failed",
+                job_id=job.id,
+                task_id=task.id,
+                url=task.url,
+                error=str(exc)
+            )
+        except Exception as exc:
+            task.status = TaskStatus.FAILED
+            task.error_message = f"Unexpected worker failure:: {str(exc)}"
+            task.failed_at = datetime.utcnow()
+
+            job.failed_urls += 1
+
+            logger.error(
+                "task_failed",
+                job_id=job.id,
+                task_id=task.id,
+                url=task.url,
+                error=str(exc)
+            )
         db.commit()
 
 async def process_job(
@@ -73,6 +121,12 @@ async def process_job(
 
     job.status = JobStatus.IN_PROGRESS
     job.started_at = datetime.utcnow()
+
+    logger.info(
+        "job_started",
+        job_id=job.id,
+        total_urls=job.total_urls
+    )
 
     db.commit()
 
@@ -102,5 +156,13 @@ async def process_job(
         job.status = JobStatus.COMPLETED
 
     job.completed_at = datetime.utcnow()
+
+    logger.info(
+        "job_completed",
+        job_id=job.id,
+        completed_urls=job.completed_urls,
+        failed_urls=job.failed_urls,
+        final_status=job.status.value
+    )
 
     db.commit()

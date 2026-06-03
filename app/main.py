@@ -11,8 +11,12 @@ from app.api.jobs import router as jobs_router
 
 import app.models
 
+from app.core.logging import configure_logging
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging()
+
     Base.metadata.create_all(bind=engine)
 
     yield
