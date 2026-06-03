@@ -1,4 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+
+from app.db.session import engine
 
 app = FastAPI(
     title="Concurrent XML Processing Pipeline",
@@ -17,3 +21,13 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/db-health")
+def db_health_check():
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+
+    return {
+        "database": "connected"
+    }
