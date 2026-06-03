@@ -1,12 +1,24 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.db.session import engine
+from app.db.base import Base
+from app.db.session import engine, get_db
+
+import app.models
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+
+    yield
 
 app = FastAPI(
     title="Concurrent XML Processing Pipeline",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 
