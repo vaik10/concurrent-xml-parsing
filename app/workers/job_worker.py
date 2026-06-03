@@ -8,7 +8,7 @@ from app.models.job import Job
 from app.models.job_task import JobTask
 
 from app.services.fetcher import FetchError, fetch_xml
-
+from app.services.parser import ParseError, parse_feed
 
 async def process_job(
     job_id: str,
@@ -36,7 +36,11 @@ async def process_job(
         db.commit()
 
         try:
-            await fetch_xml(task.url)
+            xml_content = await fetch_xml(task.url)
+
+            records = parse_feed(xml_content)
+
+            task.records_extracted = len(records)
 
             task.status = TaskStatus.COMPLETED
             task.completed_at = datetime.utcnow()
