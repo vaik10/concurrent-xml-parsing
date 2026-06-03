@@ -9,7 +9,7 @@ class JobCreateRequest(BaseModel):
     urls: List[HttpUrl] = Field(
         ...,
         min_length=1,
-        max_length=100
+        max_length=120
     )
 
 class JobCreateResponse(BaseModel):
