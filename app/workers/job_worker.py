@@ -7,6 +7,8 @@ from app.models.enums import JobStatus, TaskStatus
 from app.models.job import Job
 from app.models.job_task import JobTask
 
+from app.services.fetcher import FetchError, fetch_xml
+
 
 async def process_job(
     job_id: str,
@@ -33,16 +35,26 @@ async def process_job(
 
         db.commit()
 
-        await asyncio.sleep(2)
+        try:
+            await fetch_xml(task.url)
 
-        task.status = TaskStatus.COMPLETED
-        task.completed_at = datetime.utcnow()
+            task.status = TaskStatus.COMPLETED
+            task.completed_at = datetime.utcnow()
 
-        job.completed_urls += 1
+            job.completed_urls += 1
+
+        except Exception as exc:
+            task.status = TaskStatus.FAILED
+            task.error_message = str(exc)
+
+            job.failed_urls += 1
 
         db.commit()
 
-    job.status = JobStatus.COMPLETED
+    if job.failed_urls > 0:
+        job.status = JobStatus.FAILED
+    else:
+        job.status = JobStatus.COMPLETED
     job.completed_at = datetime.utcnow()
 
     db.commit()
