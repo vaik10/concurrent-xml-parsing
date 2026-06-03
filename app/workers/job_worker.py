@@ -12,6 +12,8 @@ from app.services.parser import ParseError, parse_feed
 
 from app.services.persistence import persist_records
 
+from app.services.retry import fetch_with_retry
+
 async def process_task(
     task: JobTask,
     job: Job,
@@ -24,8 +26,10 @@ async def process_task(
         db.commit()
 
         try:
-            xml_content = await fetch_xml(task.url)
-
+            xml_content = await fetch_with_retry(
+                fetch_coroutine=fetch_xml,
+                url=task.url
+            )
             records = parse_feed(xml_content)
 
             persist_records(
@@ -41,9 +45,14 @@ async def process_task(
 
             job.completed_urls += 1
 
-        except Exception as exc:
+        except (FetchError, ParseError) as exc:
             task.status = TaskStatus.FAILED
             task.error_message = str(exc)
+
+            job.failed_urls += 1
+        except Exception as exc:
+            task.status = TaskStatus.FAILED
+            task.error_message = f"Unexpected error: {str(exc)}"
 
             job.failed_urls += 1
 

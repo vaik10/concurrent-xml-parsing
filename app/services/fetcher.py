@@ -2,8 +2,14 @@ import aiohttp
 
 
 class FetchError(Exception):
-    pass
+    def __init__(
+        self,
+        message: str,
+        retryable: bool = True
+    ):
+        super().__init__(message)
 
+        self.retryable = retryable
 
 async def fetch_xml(
     url: str
@@ -16,11 +22,17 @@ async def fetch_xml(
         ) as session:
 
             async with session.get(url) as response:
-                if response.status != 200:
+                if response.status == 404:
                     raise FetchError(
-                        f"Failed to fetch URL: HTTP {response.status}"
+                        "Feed not found (404)",
+                        retryable=False
                     )
 
+                if response.status >= 400:
+                    raise FetchError(
+                        f"HTTP {response.status}",
+                        retryable=True
+                    )
                 return await response.text()
 
     except aiohttp.ClientError as exc:
