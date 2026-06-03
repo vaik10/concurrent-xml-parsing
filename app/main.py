@@ -7,6 +7,8 @@ from sqlalchemy import text
 from app.db.base import Base
 from app.db.session import engine, get_db
 
+from app.api.jobs import router as jobs_router
+
 import app.models
 
 @asynccontextmanager
@@ -21,6 +23,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.include_router(jobs_router)
 
 @app.get("/")
 async def root():
