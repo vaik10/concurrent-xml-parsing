@@ -145,7 +145,7 @@ async def process_job(
         .all()
     )
 
-    semaphore = asyncio.Semaphore(2)
+    semaphore = asyncio.Semaphore(10)
 
     await asyncio.gather(
         *[
