@@ -10,6 +10,8 @@ from app.models.job_task import JobTask
 from app.services.fetcher import FetchError, fetch_xml
 from app.services.parser import ParseError, parse_feed
 
+from app.services.persistence import persist_records
+
 async def process_job(
     job_id: str,
     db: Session
@@ -39,6 +41,12 @@ async def process_job(
             xml_content = await fetch_xml(task.url)
 
             records = parse_feed(xml_content)
+
+            persist_records(
+                db=db,
+                job_task_id=task.id,
+                records=records
+            )
 
             task.records_extracted = len(records)
 

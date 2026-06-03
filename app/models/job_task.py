@@ -54,3 +54,9 @@ class JobTask(Base):
         "Job",
         back_populates="tasks"
     )
+
+    records = relationship(
+        "FeedRecord",
+        back_populates="task",
+        cascade="all, delete-orphan"
+    )
