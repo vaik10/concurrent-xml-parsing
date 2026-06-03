@@ -23,6 +23,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Concurrent XML Processing Pipeline",
+    description=(
+        "Asynchronous XML ingestion pipeline with "
+        "concurrent processing, retries, monitoring, "
+        "and structured logging."
+    ),
     version="1.0.0",
     lifespan=lifespan
 )

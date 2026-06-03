@@ -1,17 +1,21 @@
 from typing import List
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
 
 from datetime import datetime
 from typing import Optional
 
 class JobCreateRequest(BaseModel):
-    urls: List[HttpUrl]
-
+    urls: List[HttpUrl] = Field(
+        ...,
+        min_length=1,
+        max_length=100
+    )
 
 class JobCreateResponse(BaseModel):
     job_id: str
     status: str
+    message: str
 
 class JobStatusResponse(BaseModel):
     job_id: str

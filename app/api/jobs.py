@@ -27,7 +27,12 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=JobCreateResponse
+    response_model=JobCreateResponse,
+    summary="Create XML processing job",
+    description=(
+        "Creates a new XML processing pipeline job "
+        "and schedules asynchronous feed processing."
+    )
 )
 def create_job(
     payload: JobCreateRequest,
@@ -63,12 +68,14 @@ def create_job(
 
     return JobCreateResponse(
         job_id=job.id,
-        status=job.status.value
+        status=job.status.value,
+        message="Job created successfully"
     )
 
 @router.get(
     "/{job_id}",
-    response_model=JobStatusResponse
+    response_model=JobStatusResponse,
+    summary="Get aggregate job execution status"
 )
 def get_job_status(
     job_id: str,
@@ -83,7 +90,7 @@ def get_job_status(
     if not job:
         raise HTTPException(
             status_code=404,
-            detail="Job not found"
+            detail=f"Job with id '{job_id}' not found"
         )
 
     in_progress_urls = (
@@ -128,7 +135,8 @@ def get_job_status(
 
 @router.get(
     "/{job_id}/tasks",
-    response_model=list[JobTaskResponse]
+    response_model=list[JobTaskResponse],
+    summary="Get per-task execution details"
 )
 def get_job_tasks(
     job_id: str,
